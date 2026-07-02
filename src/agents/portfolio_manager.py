@@ -25,70 +25,103 @@ class PortfolioManagerOutput(BaseModel):
 def portfolio_management_agent(state: AgentState, agent_id: str = "portfolio_manager"):
     """Makes final trading decisions and generates orders for multiple tickers"""
 
-    portfolio = state["data"]["portfolio"]
+    # Alpha Chaser: Handle multiple portfolios if present
+    if "portfolios" in state["data"]:
+        llm_portfolios = state["data"]["portfolios"]
+        # If this agent_id corresponds to a specific LLM, use that portfolio
+        # Otherwise, this might be a multi-portfolio run where we need to process all
+        if agent_id in llm_portfolios:
+            portfolios_to_process = {agent_id: llm_portfolios[agent_id]}
+        else:
+            portfolios_to_process = llm_portfolios
+    else:
+        # Fallback to single portfolio for backward compatibility
+        portfolios_to_process = {"portfolio_manager": state["data"].get("portfolio", {})}
+
     analyst_signals = state["data"]["analyst_signals"]
     tickers = state["data"]["tickers"]
+    
+    all_decisions = {}
+    new_messages = []
 
-    position_limits = {}
-    current_prices = {}
-    max_shares = {}
-    signals_by_ticker = {}
-    for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Processing analyst signals")
+    for current_llm_id, portfolio in portfolios_to_process.items():
+        # Use the specific LLM's ID for progress and reasoning
+        display_id = current_llm_id
 
-        # Find the corresponding risk manager for this portfolio manager
-        if agent_id.startswith("portfolio_manager_"):
-            suffix = agent_id.split('_')[-1]
-            risk_manager_id = f"risk_management_agent_{suffix}"
-        else:
-            risk_manager_id = "risk_management_agent"  # Fallback for CLI
+        # Initialize these variables for each LLM's portfolio
+        position_limits = {}
+        current_prices = {}
+        max_shares = {}
+        signals_by_ticker = {}
 
-        risk_data = analyst_signals.get(risk_manager_id, {}).get(ticker, {})
-        position_limits[ticker] = risk_data.get("remaining_position_limit", 0.0)
-        current_prices[ticker] = float(risk_data.get("current_price", 0.0))
+        for ticker in tickers:
+            progress.update_status(display_id, ticker, "Processing analyst signals")
 
-        # Calculate maximum shares allowed based on position limit and price
-        if current_prices[ticker] > 0:
-            max_shares[ticker] = int(position_limits[ticker] // current_prices[ticker])
-        else:
-            max_shares[ticker] = 0
+            # Find the corresponding risk manager for this portfolio manager
+            # In Alpha Chaser, each LLM has its own risk manager signals keyed by its ID
+            risk_manager_id = f"risk_management_agent_{current_llm_id}"
+            if risk_manager_id not in analyst_signals:
+                risk_manager_id = "risk_management_agent" # Fallback
 
-        # Compress analyst signals to {sig, conf}
-        ticker_signals = {}
-        for agent, signals in analyst_signals.items():
-            if not agent.startswith("risk_management_agent") and ticker in signals:
-                sig = signals[ticker].get("signal")
-                conf = signals[ticker].get("confidence")
-                if sig is not None and conf is not None:
-                    ticker_signals[agent] = {"sig": sig, "conf": conf}
-        signals_by_ticker[ticker] = ticker_signals
+            risk_data = analyst_signals.get(risk_manager_id, {}).get(ticker, {})
+            position_limits[ticker] = risk_data.get("remaining_position_limit", 0.0)
+            current_prices[ticker] = float(risk_data.get("current_price", 0.0))
 
-    state["data"]["current_prices"] = current_prices
+            # Calculate maximum shares allowed based on position limit and price
+            if current_prices[ticker] > 0:
+                max_shares[ticker] = int(position_limits[ticker] // current_prices[ticker])
+            else:
+                max_shares[ticker] = 0
 
-    progress.update_status(agent_id, None, "Generating trading decisions")
+            # Compress analyst signals to {sig, conf}
+            ticker_signals = {}
+            for agent, signals in analyst_signals.items():
+                if not agent.startswith("risk_management_agent") and ticker in signals:
+                    sig = signals[ticker].get("signal")
+                    conf = signals[ticker].get("confidence")
+                    if sig is not None and conf is not None:
+                        ticker_signals[agent] = {"sig": sig, "conf": conf}
+            signals_by_ticker[ticker] = ticker_signals
 
-    result = generate_trading_decision(
-        tickers=tickers,
-        signals_by_ticker=signals_by_ticker,
-        current_prices=current_prices,
-        max_shares=max_shares,
-        portfolio=portfolio,
-        agent_id=agent_id,
-        state=state,
-    )
-    message = HumanMessage(
-        content=json.dumps({ticker: decision.model_dump() for ticker, decision in result.decisions.items()}),
-        name=agent_id,
-    )
+        state["data"]["current_prices"] = current_prices
 
-    if state["metadata"]["show_reasoning"]:
-        show_agent_reasoning({ticker: decision.model_dump() for ticker, decision in result.decisions.items()},
-                             "Portfolio Manager")
+        progress.update_status(display_id, None, "Generating trading decisions")
 
-    progress.update_status(agent_id, None, "Done")
+        result = generate_trading_decision(
+            tickers=tickers,
+            signals_by_ticker=signals_by_ticker,
+            current_prices=current_prices,
+            max_shares=max_shares,
+            portfolio=portfolio,
+            agent_id=display_id,
+            state=state,
+        )
+        
+        decisions_dict = {ticker: decision.model_dump() for ticker, decision in result.decisions.items()}
+        all_decisions[current_llm_id] = decisions_dict
+        
+        message = HumanMessage(
+            content=json.dumps(decisions_dict),
+            name=display_id,
+        )
+        new_messages.append(message)
+
+        if state["metadata"].get("show_reasoning"):
+            show_agent_reasoning(decisions_dict, f"Portfolio Manager ({display_id})")
+
+        progress.update_status(display_id, None, "Done")
+
+    # If we processed multiple portfolios, the final message should be a combined JSON
+    if len(all_decisions) > 1:
+        final_message = HumanMessage(
+            content=json.dumps(all_decisions),
+            name=agent_id,
+        )
+    else:
+        final_message = new_messages[0]
 
     return {
-        "messages": state["messages"] + [message],
+        "messages": state["messages"] + [final_message],
         "data": state["data"],
     }
 
@@ -225,7 +258,7 @@ def generate_trading_decision(
                 "Format:\n"
                 "{{\n"
                 '  "decisions": {{\n'
-                '    "TICKER": {{"action":"...","quantity":int,"confidence":int,"reasoning":"..."}}\n'
+                '    "TICKER": {"action":"...","quantity":int,"confidence":int,"reasoning":"..."}}\n'
                 "  }}\n"
                 "}}"
             ),

@@ -27,15 +27,28 @@ class AgentController:
         else:
             portfolio_payload = portfolio
 
-        output = agent(
-            tickers=list(tickers),
-            start_date=start_date,
-            end_date=end_date,
-            portfolio=portfolio_payload,
-            model_name=model_name,
-            model_provider=model_provider,
-            selected_analysts=list(selected_analysts) if selected_analysts is not None else None,
-        )
+        # Alpha Chaser: Check if we are in a multi-portfolio context
+        # If the portfolio_payload is actually a dict of portfolios, pass it as 'portfolios'
+        if isinstance(portfolio_payload, dict) and any(isinstance(v, dict) and "cash" in v for v in portfolio_payload.values()):
+            output = agent(
+                tickers=list(tickers),
+                start_date=start_date,
+                end_date=end_date,
+                portfolios=portfolio_payload,
+                model_name=model_name,
+                model_provider=model_provider,
+                selected_analysts=list(selected_analysts) if selected_analysts is not None else None,
+            )
+        else:
+            output = agent(
+                tickers=list(tickers),
+                start_date=start_date,
+                end_date=end_date,
+                portfolio=portfolio_payload,
+                model_name=model_name,
+                model_provider=model_provider,
+                selected_analysts=list(selected_analysts) if selected_analysts is not None else None,
+            )
 
         # Normalize outputs to avoid None/missing keys
         decisions_in: Dict[str, Any] = dict(output.get("decisions", {})) if isinstance(output, dict) else {}
@@ -57,10 +70,14 @@ class AgentController:
                 action = Action.HOLD.value  # type: ignore[assignment]
             normalized_decisions[ticker] = {"action": action, "quantity": qty_val}  # type: ignore[assignment]
 
+        # Alpha Chaser: Preserve metadata (for cost tracking)
+        metadata_in = output.get("metadata", {}) if isinstance(output, dict) else {}
+
         # Preserve any agent-provided analyst signals without modification
         normalized_output: AgentOutput = {
             "decisions": normalized_decisions,
             "analyst_signals": analyst_signals_in,
+            "metadata": metadata_in,
         }
         return normalized_output
 

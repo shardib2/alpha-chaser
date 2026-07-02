@@ -7,6 +7,15 @@ from src.utils.progress import progress
 from src.graph.state import AgentState
 
 
+# Token pricing per 1M tokens (Input, Output)
+MODEL_PRICES = {
+    "claude-fable-5": (10.0, 50.0),
+    "gpt-4o": (5.0, 15.0),
+    "gpt-4.1": (5.0, 15.0),
+    "claude-3-5-sonnet": (3.0, 15.0),
+    "deepseek-v4-pro": (2.0, 8.0),
+}
+
 def call_llm(
     prompt: any,
     pydantic_model: type[BaseModel],
@@ -41,9 +50,7 @@ def call_llm(
     # Extract API keys from state if available
     api_keys = None
     if state:
-        request = state.get("metadata", {}).get("request")
-        if request and hasattr(request, 'api_keys'):
-            api_keys = request.api_keys
+        api_keys = state.get("metadata", {}).get("api_keys")
 
     model_info = get_model_info(model_name, model_provider)
     llm = get_model(model_name, model_provider, api_keys)
@@ -60,6 +67,35 @@ def call_llm(
         try:
             # Call the LLM
             result = llm.invoke(prompt)
+            
+            # Alpha Chaser: Track costs if state and model info are available
+            if state and model_info:
+                llm_id = agent_name if agent_name else "default"
+                # If agent_name is a specific portfolio manager, use its ID
+                if llm_id.startswith("portfolio_manager_"):
+                    llm_id = llm_id.replace("portfolio_manager_", "")
+                
+                # Extract token usage from result if available (standard in LangChain)
+                usage = getattr(result, "usage_metadata", {}) or getattr(result, "response_metadata", {}).get("token_usage", {})
+                if usage:
+                    in_tokens = usage.get("input_tokens", usage.get("prompt_tokens", 0))
+                    out_tokens = usage.get("output_tokens", usage.get("completion_tokens", 0))
+                    
+                    # Calculate cost
+                    prices = MODEL_PRICES.get(model_info.model_name, (0.0, 0.0))
+                    cost = (in_tokens / 1_000_000 * prices[0]) + (out_tokens / 1_000_000 * prices[1])
+                    
+                    # Store in state
+                    if "metadata" not in state:
+                        state["metadata"] = {}
+                    if "llm_costs" not in state["metadata"]:
+                        state["metadata"]["llm_costs"] = {}
+                    
+                    current_costs = state["metadata"]["llm_costs"].get(llm_id, {"input_tokens": 0, "output_tokens": 0, "total_cost": 0.0})
+                    current_costs["input_tokens"] += in_tokens
+                    current_costs["output_tokens"] += out_tokens
+                    current_costs["total_cost"] += cost
+                    state["metadata"]["llm_costs"][llm_id] = current_costs
 
             # For non-JSON support models, we need to extract and parse the JSON manually
             if model_info and not model_info.has_json_mode():

@@ -47,11 +47,13 @@ def run_hedge_fund(
     tickers: list[str],
     start_date: str,
     end_date: str,
-    portfolio: dict,
+    portfolio: dict = None,
+    portfolios: dict = None, # Alpha Chaser: Support multiple portfolios
     show_reasoning: bool = False,
     selected_analysts: list[str] = [],
     model_name: str = "gpt-4.1",
     model_provider: str = "OpenAI",
+    api_keys: dict = None,
 ):
     # Start progress tracking
     progress.start()
@@ -61,6 +63,18 @@ def run_hedge_fund(
         workflow = create_workflow(selected_analysts if selected_analysts else None)
         agent = workflow.compile()
 
+        # Alpha Chaser: If multiple portfolios provided, use them
+        data_payload = {
+            "tickers": tickers,
+            "start_date": start_date,
+            "end_date": end_date,
+            "analyst_signals": {},
+        }
+        if portfolios:
+            data_payload["portfolios"] = portfolios
+        else:
+            data_payload["portfolio"] = portfolio
+
         final_state = agent.invoke(
             {
                 "messages": [
@@ -68,17 +82,12 @@ def run_hedge_fund(
                         content="Make trading decisions based on the provided data.",
                     )
                 ],
-                "data": {
-                    "tickers": tickers,
-                    "portfolio": portfolio,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "analyst_signals": {},
-                },
+                "data": data_payload,
                 "metadata": {
                     "show_reasoning": show_reasoning,
                     "model_name": model_name,
                     "model_provider": model_provider,
+                    "api_keys": api_keys,
                 },
             },
         )
@@ -86,6 +95,7 @@ def run_hedge_fund(
         return {
             "decisions": parse_hedge_fund_response(final_state["messages"][-1].content),
             "analyst_signals": final_state["data"]["analyst_signals"],
+            "metadata": final_state.get("metadata", {}),
         }
     finally:
         # Stop progress tracking

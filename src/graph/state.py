@@ -16,6 +16,9 @@ class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], operator.add]
     data: Annotated[dict[str, any], merge_dicts]
     metadata: Annotated[dict[str, any], merge_dicts]
+    # Alpha Chaser: Each LLM manages its own isolated portfolio and costs
+    # portfolios: Dict[llm_id, portfolio_dict]
+    # costs: Dict[llm_id, cost_dict]
 
 
 def show_agent_reasoning(output, agent_name):
