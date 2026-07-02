@@ -31,6 +31,7 @@ class ModelProvider(str, Enum):
     GIGACHAT = "GigaChat"
     AZURE_OPENAI = "Azure OpenAI"
     XAI = "xAI"
+    TOGETHER = "Together"
 
 
 class LLMModel(BaseModel):
@@ -39,6 +40,9 @@ class LLMModel(BaseModel):
     display_name: str
     model_name: str
     provider: ModelProvider
+    description: str = ""
+    cost_per_1m_input: float = 0.0   # USD per 1M input tokens
+    cost_per_1m_output: float = 0.0  # USD per 1M output tokens
 
     def to_choice_tuple(self) -> Tuple[str, str, str]:
         """Convert to format needed for questionary choices"""
@@ -100,7 +104,10 @@ def load_models_from_json(json_path: str) -> List[LLMModel]:
             LLMModel(
                 display_name=model_data["display_name"],
                 model_name=model_data["model_name"],
-                provider=provider_enum
+                provider=provider_enum,
+                description=model_data.get("description", ""),
+                cost_per_1m_input=model_data.get("cost_per_1m_input", 0.0),
+                cost_per_1m_output=model_data.get("cost_per_1m_output", 0.0),
             )
         )
     return models

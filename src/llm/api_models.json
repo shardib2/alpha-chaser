@@ -1,37 +1,106 @@
 [
   {
-    "display_name": "Fable 5",
+    "display_name": "Claude Fable 5 (Premium)",
     "model_name": "claude-fable-5",
-    "provider": "Anthropic"
+    "provider": "Anthropic",
+    "description": "Anthropic's most capable model. Premium tier for institutional-grade portfolio management.",
+    "cost_per_1m_input": 10.0,
+    "cost_per_1m_output": 50.0
   },
   {
-    "display_name": "Opus 4.8",
+    "display_name": "Claude Opus 4.8",
     "model_name": "claude-opus-4-8",
-    "provider": "Anthropic"
-  },
-  {
-    "display_name": "Grok 4.3",
-    "model_name": "grok-4.3",
-    "provider": "xAI"
-  },
-  {
-    "display_name": "DeepSeek V4 Pro",
-    "model_name": "deepseek-v4-pro",
-    "provider": "DeepSeek"
+    "provider": "Anthropic",
+    "description": "Anthropic's flagship reasoning model.",
+    "cost_per_1m_input": 15.0,
+    "cost_per_1m_output": 75.0
   },
   {
     "display_name": "GPT-5.5",
     "model_name": "gpt-5.5",
-    "provider": "OpenAI"
+    "provider": "OpenAI",
+    "description": "OpenAI's latest flagship model with strong reasoning and code capabilities.",
+    "cost_per_1m_input": 5.0,
+    "cost_per_1m_output": 30.0
   },
   {
-    "display_name": "Kimi K2.6",
-    "model_name": "kimi-k2.6",
-    "provider": "Kimi"
+    "display_name": "GPT-5.5 Pro",
+    "model_name": "gpt-5.5-pro",
+    "provider": "OpenAI",
+    "description": "OpenAI's highest-accuracy model for complex tasks.",
+    "cost_per_1m_input": 30.0,
+    "cost_per_1m_output": 180.0
+  },
+  {
+    "display_name": "Gemini 2.5 Pro",
+    "model_name": "gemini-2.5-pro",
+    "provider": "Google",
+    "description": "Google's best multimodal model with strong reasoning.",
+    "cost_per_1m_input": 1.25,
+    "cost_per_1m_output": 10.0
   },
   {
     "display_name": "Gemini 3.1 Pro",
     "model_name": "gemini-3.1-pro-preview",
-    "provider": "Google"
+    "provider": "Google",
+    "description": "Google's latest generation Gemini Pro model.",
+    "cost_per_1m_input": 2.50,
+    "cost_per_1m_output": 15.0
+  },
+  {
+    "display_name": "Grok 4.3",
+    "model_name": "grok-4.3",
+    "provider": "xAI",
+    "description": "xAI's flagship model with strong reasoning and real-time data access.",
+    "cost_per_1m_input": 1.25,
+    "cost_per_1m_output": 2.50
+  },
+  {
+    "display_name": "Grok 4",
+    "model_name": "grok-4",
+    "provider": "xAI",
+    "description": "xAI's high-capability model.",
+    "cost_per_1m_input": 3.0,
+    "cost_per_1m_output": 15.0
+  },
+  {
+    "display_name": "Llama 4 Maverick",
+    "model_name": "meta-llama/llama-4-maverick",
+    "provider": "Meta",
+    "description": "Meta's open-weight frontier model with 1M context window and native multimodality.",
+    "cost_per_1m_input": 0.15,
+    "cost_per_1m_output": 0.60
+  },
+  {
+    "display_name": "Llama 4 Scout",
+    "model_name": "meta-llama/llama-4-scout",
+    "provider": "Meta",
+    "description": "Meta's efficient open-weight model, excellent cost-performance ratio.",
+    "cost_per_1m_input": 0.10,
+    "cost_per_1m_output": 0.30
+  },
+  {
+    "display_name": "DeepSeek V4 Pro",
+    "model_name": "deepseek-v4-pro",
+    "provider": "DeepSeek",
+    "description": "DeepSeek's flagship model, strong reasoning at competitive cost.",
+    "cost_per_1m_input": 1.74,
+    "cost_per_1m_output": 3.48
+  },
+  {
+    "display_name": "DeepSeek V4 Flash",
+    "model_name": "deepseek-v4-flash",
+    "provider": "DeepSeek",
+    "description": "DeepSeek's fast, low-cost model for high-volume inference.",
+    "cost_per_1m_input": 0.14,
+    "cost_per_1m_output": 0.28
+  },
+  {
+    "display_name": "Kimi K2.6",
+    "model_name": "kimi-k2.6",
+    "provider": "Kimi",
+    "description": "Moonshot AI's latest model with strong multilingual capabilities.",
+    "cost_per_1m_input": 0.60,
+    "cost_per_1m_output": 2.50
   }
 ]
