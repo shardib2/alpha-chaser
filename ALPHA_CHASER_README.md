@@ -2,6 +2,8 @@
 
 Alpha Chaser is a competitive refactor of the [AI Hedge Fund](https://github.com/virattt/ai-hedge-fund). It allows multiple Large Language Models (LLMs) to compete against each other in a real-time or backtested trading simulation, each managing its own fully isolated portfolio.
 
+> **Looking for the live daily competition?** The repo also contains the **[LLM Trading Arena](ARENA_README.md)** — a Rallies.ai-style arena where 7 LLMs each trade a distinct strategy with $100k paper portfolios, automated via GitHub Actions. It is standalone (one `pip install requests` dependency) and separate from the backtester below.
+
 ---
 
 ## 🏁 The Concept

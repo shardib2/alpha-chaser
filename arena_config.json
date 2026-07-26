@@ -1,0 +1,57 @@
+{
+  "starting_cash": 100000.0,
+  "benchmark": "SPY",
+  "max_orders_per_cycle": 8,
+  "max_position_pct": 0.35,
+  "universe": [
+    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO",
+    "AMD", "NFLX", "CRM", "ORCL", "COST", "WMT", "JPM", "GS",
+    "V", "MA", "UNH", "LLY", "JNJ", "XOM", "CVX", "CAT",
+    "BA", "DIS", "NKE", "SBUX", "PLTR", "COIN", "UBER", "SHOP",
+    "SMCI", "MU", "INTC", "PFE", "T", "KO", "PG", "SPY", "QQQ", "IWM"
+  ],
+  "competitors": [
+    {
+      "id": "gpt",
+      "display": "GPT-5.5",
+      "model": "openai/gpt-5.5",
+      "strategy": "MOMENTUM: Ride strength. Buy names showing strong 1-month and 5-day relative strength with rising volume; cut losers fast (exit anything down >7% from your cost). Concentrate in 4-8 high-conviction winners. You are judged on total return, so let winners run."
+    },
+    {
+      "id": "claude",
+      "display": "Claude Sonnet 4.5",
+      "model": "anthropic/claude-sonnet-4.5",
+      "strategy": "QUALITY COMPOUNDERS: Own durable, highly profitable franchises with wide moats at reasonable prices. Low turnover - trade only when the thesis changes or something clearly better appears. Prefer 5-8 positions you would hold for months."
+    },
+    {
+      "id": "gemini",
+      "display": "Gemini 2.5 Pro",
+      "model": "google/gemini-2.5-pro",
+      "strategy": "GROWTH AT A REASONABLE PRICE: Find secular growers (AI, cloud, payments, biotech) whose recent pullbacks make the risk/reward attractive. Blend growth conviction with valuation discipline. 5-10 positions."
+    },
+    {
+      "id": "deepseek",
+      "display": "DeepSeek V3.2",
+      "model": "deepseek/deepseek-chat-v3-0324",
+      "strategy": "CONTRARIAN VALUE: Buy quality names that are down and unloved (negative 1-month returns, oversold) when the damage looks overdone; trim or sell what has become expensive after big run-ups. You profit from mean reversion over weeks, not days."
+    },
+    {
+      "id": "grok",
+      "display": "Grok 4",
+      "model": "x-ai/grok-4",
+      "strategy": "EVENT-DRIVEN / AGGRESSIVE: Trade around catalysts - earnings momentum, product cycles, sector rotations, unusual moves in the snapshot. Higher turnover and concentration are fine. Move decisively when you see a setup; hold cash when you do not."
+    },
+    {
+      "id": "llama",
+      "display": "Llama 4 Maverick",
+      "model": "meta-llama/llama-4-maverick",
+      "strategy": "SHORT-TERM MEAN REVERSION: Buy liquid large caps after sharp multi-day drops (5-day return notably negative while the 1-month trend is intact) and sell them after the bounce. Small, diversified positions; take profits quickly."
+    },
+    {
+      "id": "qwen",
+      "display": "Qwen3 Max",
+      "model": "qwen/qwen3-max",
+      "strategy": "DEFENSIVE INCOME / LOW VOLATILITY: Preserve capital first. Favor staples, healthcare, energy, dividend payers and index ETFs; keep a cash buffer of at least 15%. Win by losing less in drawdowns while still participating in upside."
+    }
+  ]
+}
