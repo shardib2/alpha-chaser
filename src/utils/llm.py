@@ -77,13 +77,24 @@ def call_llm(
         api_keys = state.get("metadata", {}).get("api_keys")
 
     model_info = get_model_info(model_name, model_provider)
-    llm = get_model(model_name, model_provider, api_keys)
+    try:
+        llm = get_model(model_name, model_provider, api_keys)
+    except Exception as e:
+        # A missing key or unroutable provider should degrade this agent to its
+        # default output, not crash the whole run.
+        print(f"Error creating LLM client for {model_name} ({model_provider}): {e}")
+        if default_factory:
+            return default_factory()
+        return create_default_response(pydantic_model)
 
-    # For non-JSON support models, we can use structured output
-    if not (model_info and not model_info.has_json_mode()):
+    # For non-JSON support models, we can use structured output.
+    # include_raw=True keeps the raw AIMessage so token usage stays available.
+    use_structured = not (model_info and not model_info.has_json_mode())
+    if use_structured:
         llm = llm.with_structured_output(
             pydantic_model,
             method="json_mode",
+            include_raw=True,
         )
 
     # Call the LLM with retries
@@ -91,7 +102,16 @@ def call_llm(
         try:
             # Call the LLM
             result = llm.invoke(prompt)
-            
+
+            if use_structured:
+                raw_message = result.get("raw")
+                parsed = result.get("parsed")
+                if parsed is None:
+                    raise ValueError(f"structured output parsing failed: {result.get('parsing_error')}")
+            else:
+                raw_message = result
+                parsed = None
+
             # Alpha Chaser: Track costs if state and model info are available
             if state and model_info:
                 llm_id = agent_name if agent_name else "default"
@@ -99,8 +119,9 @@ def call_llm(
                 if llm_id.startswith("portfolio_manager_"):
                     llm_id = llm_id.replace("portfolio_manager_", "")
                 
-                # Extract token usage from result if available (standard in LangChain)
-                usage = getattr(result, "usage_metadata", {}) or getattr(result, "response_metadata", {}).get("token_usage", {})
+                # Extract token usage from the raw message (standard in LangChain)
+                usage = getattr(raw_message, "usage_metadata", None) or \
+                    (getattr(raw_message, "response_metadata", {}) or {}).get("token_usage", {})
                 if usage:
                     in_tokens = usage.get("input_tokens", usage.get("prompt_tokens", 0))
                     out_tokens = usage.get("output_tokens", usage.get("completion_tokens", 0))
@@ -122,12 +143,12 @@ def call_llm(
                     state["metadata"]["llm_costs"][llm_id] = current_costs
 
             # For non-JSON support models, we need to extract and parse the JSON manually
-            if model_info and not model_info.has_json_mode():
-                parsed_result = extract_json_from_response(result.content)
+            if not use_structured:
+                parsed_result = extract_json_from_response(raw_message.content)
                 if parsed_result:
                     return pydantic_model(**parsed_result)
-            else:
-                return result
+                raise ValueError("could not extract JSON from model response")
+            return parsed
 
         except Exception as e:
             if agent_name:

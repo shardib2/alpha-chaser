@@ -3,6 +3,32 @@ from colorama import Fore, Style
 from src.main import run_hedge_fund
 from src.backtesting.engine import BacktestEngine
 from src.cli.input import parse_cli_inputs
+from src.llm.models import ModelProvider, get_model, get_model_info
+
+
+def validate_roster(llm_configs: dict) -> None:
+    """Fail fast, before any data fetching or LLM spend, if a competitor can't run."""
+    problems = []
+    for llm_id, config in llm_configs.items():
+        name, provider = config["model_name"], config["model_provider"]
+        try:
+            provider_enum = ModelProvider(provider)
+        except ValueError:
+            problems.append(f"{llm_id}: unknown provider '{provider}'")
+            continue
+        if get_model_info(name, provider) is None:
+            print(f"{Fore.YELLOW}Warning: {llm_id} model '{name}' is not in api_models.json; "
+                  f"cost tracking will show $0 for it.{Style.RESET_ALL}")
+        try:
+            get_model(name, provider_enum)  # no network call; raises if key/routing missing
+        except Exception as e:
+            problems.append(f"{llm_id} ({name}): {e}")
+    if problems:
+        print(f"\n{Fore.RED}{Style.BRIGHT}Cannot start Alpha Chaser — fix these first:{Style.RESET_ALL}")
+        for p in problems:
+            print(f"  - {p}")
+        sys.exit(1)
+
 
 def run_alpha_chaser():
     """Run the Alpha Chaser competitive backtest."""
@@ -19,10 +45,20 @@ def run_alpha_chaser():
     # We'll use the user's selected model as one, and add others for competition
     llm_configs = {
         "Premium_Claude": {"model_name": "claude-fable-5", "model_provider": "Anthropic"},
-        "GPT_Standard": {"model_name": "gpt-4o", "model_provider": "OpenAI"},
+        "GPT_Standard": {"model_name": "gpt-5.5", "model_provider": "OpenAI"},
         "DeepSeek_Challenger": {"model_name": "deepseek-v4-pro", "model_provider": "DeepSeek"},
         "User_Selection": {"model_name": inputs.model_name, "model_provider": inputs.model_provider},
     }
+    # Drop duplicates if the user picked a model already in the roster
+    seen = set()
+    for llm_id in list(llm_configs):
+        key = (llm_configs[llm_id]["model_name"], llm_configs[llm_id]["model_provider"])
+        if key in seen:
+            del llm_configs[llm_id]
+        else:
+            seen.add(key)
+
+    validate_roster(llm_configs)
 
     print(f"\n{Fore.CYAN}{Style.BRIGHT}🚀 Starting Alpha Chaser: Multi-LLM Portfolio Race{Style.RESET_ALL}")
     print(f"{Fore.WHITE}Competitors:{Style.RESET_ALL}")

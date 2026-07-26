@@ -230,6 +230,29 @@ def get_model(model_name: str, model_provider: ModelProvider, api_keys: dict = N
         # users in mainland China can override via MOONSHOT_BASE_URL=https://api.moonshot.cn/v1.
         base_url = os.getenv("MOONSHOT_BASE_URL") or os.getenv("KIMI_BASE_URL") or "https://api.moonshot.ai/v1"
         return ChatOpenAI(model=model_name, api_key=api_key, base_url=base_url)
+    elif model_provider in (ModelProvider.META, ModelProvider.TOGETHER):
+        # Meta models are open-weight; serve them through an OpenAI-compatible
+        # host: Together directly, or OpenRouter if that's the key available.
+        together_key = (api_keys or {}).get("TOGETHER_API_KEY") or os.getenv("TOGETHER_API_KEY")
+        openrouter_key = (api_keys or {}).get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+        if together_key:
+            return ChatOpenAI(model=model_name, api_key=together_key, base_url="https://api.together.xyz/v1")
+        if openrouter_key:
+            return ChatOpenAI(model=model_name, api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")
+        print("API Key Error: Meta/Together models need TOGETHER_API_KEY or OPENROUTER_API_KEY set.")
+        raise ValueError(f"No API key found to serve {model_provider.value} model '{model_name}'. Set TOGETHER_API_KEY or OPENROUTER_API_KEY.")
+    elif model_provider == ModelProvider.MISTRAL:
+        api_key = (api_keys or {}).get("MISTRAL_API_KEY") or os.getenv("MISTRAL_API_KEY")
+        if not api_key:
+            print("API Key Error: Please make sure MISTRAL_API_KEY is set in your .env file or provided via API keys.")
+            raise ValueError("Mistral API key not found. Please make sure MISTRAL_API_KEY is set in your .env file or provided via API keys.")
+        return ChatOpenAI(model=model_name, api_key=api_key, base_url="https://api.mistral.ai/v1")
+    elif model_provider == ModelProvider.ALIBABA:
+        api_key = (api_keys or {}).get("DASHSCOPE_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
+        if not api_key:
+            print("API Key Error: Please make sure DASHSCOPE_API_KEY is set in your .env file or provided via API keys.")
+            raise ValueError("Alibaba (DashScope) API key not found. Please make sure DASHSCOPE_API_KEY is set in your .env file or provided via API keys.")
+        return ChatOpenAI(model=model_name, api_key=api_key, base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
     elif model_provider == ModelProvider.XAI:
         api_key = (api_keys or {}).get("XAI_API_KEY") or os.getenv("XAI_API_KEY")
         if not api_key:

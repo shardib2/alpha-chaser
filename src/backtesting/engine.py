@@ -35,10 +35,18 @@ class BacktestEngine:
         start_date: str,
         end_date: str,
         initial_capital: float,
-        llm_configs: Dict[str, Dict[str, str]], # Map of llm_id -> {model_name, model_provider}
+        llm_configs: Dict[str, Dict[str, str]] | None = None, # Map of llm_id -> {model_name, model_provider}
         selected_analysts: list[str] | None,
         initial_margin_requirement: float,
+        model_name: str | None = None,
+        model_provider: str | None = None,
     ) -> None:
+        # Legacy single-model callers (backtester.py, backtesting/cli.py, tests)
+        # pass model_name/model_provider; wrap them as a one-competitor race.
+        if llm_configs is None:
+            if not model_name or not model_provider:
+                raise ValueError("Provide either llm_configs or model_name+model_provider")
+            llm_configs = {"default": {"model_name": model_name, "model_provider": model_provider}}
         self._agent = agent
         self._tickers = tickers
         self._start_date = start_date
@@ -129,28 +137,28 @@ class BacktestEngine:
             if missing_data:
                 continue
 
-            # Alpha Chaser: Run each LLM independently against its own portfolio
-            # We collect all portfolio snapshots to pass to the agent
-            portfolio_snapshots = {
-                pid: p.get_snapshot() for pid, p in self._portfolios.items()
-            }
+            # Alpha Chaser: Run each LLM independently against its own portfolio.
+            # Each competitor gets ONE graph invocation with ONLY its own book,
+            # keyed by llm_id so risk/portfolio agents attribute state correctly
+            # and decisions come back keyed by ticker.
+            first_llm = next(iter(self._llm_configs))
+            display_output: Dict | None = None
+            display_trades: Dict[str, int] = {}
 
             for llm_id, config in self._llm_configs.items():
                 portfolio = self._portfolios[llm_id]
-                
-                # We pass the full set of portfolios to ensure isolation logic works
-                # but the controller will run the agent for this specific LLM
+
                 agent_output = self._agent_controller.run_agent(
                     self._agent,
                     tickers=self._tickers,
                     start_date=lookback_start,
                     end_date=current_date_str,
-                    portfolio=portfolio_snapshots, # Pass all snapshots
+                    portfolio={llm_id: portfolio.get_snapshot()},
                     model_name=config["model_name"],
                     model_provider=config["model_provider"],
                     selected_analysts=self._selected_analysts,
                 )
-                
+
                 decisions = agent_output["decisions"]
                 executed_trades: Dict[str, int] = {}
                 for ticker in self._tickers:
@@ -159,6 +167,10 @@ class BacktestEngine:
                     qty = d.get("quantity", 0)
                     executed_qty = self._executor.execute_trade(ticker, action, qty, current_prices[ticker], portfolio)
                     executed_trades[ticker] = executed_qty
+
+                if llm_id == first_llm:
+                    display_output = agent_output
+                    display_trades = dict(executed_trades)
 
                 total_value = calculate_portfolio_value(portfolio, current_prices)
                 exposures = compute_exposures(portfolio, current_prices)
@@ -180,25 +192,27 @@ class BacktestEngine:
                     if computed:
                         self._llm_performance_metrics[llm_id].update(computed)
                 
-                # Alpha Chaser: Update costs from agent output
-                # The costs are stored in the state's metadata, which is passed back in agent_output
-                # Note: agent_output here is the normalized output from AgentController
-                # We need to ensure the controller preserves metadata or we pull it from the raw response
-                if "metadata" in agent_output and "llm_costs" in agent_output["metadata"]:
-                    costs = agent_output["metadata"]["llm_costs"].get(llm_id, {})
-                    self._llm_performance_metrics[llm_id]["total_cost"] = costs.get("total_cost", 0.0)
+                # Alpha Chaser: Accumulate costs from agent output.
+                # The whole invocation ran for this competitor, so every cost entry
+                # (analysts keyed by agent name + portfolio manager keyed by llm_id)
+                # belongs to it. Each day's run starts a fresh state, so add, don't assign.
+                day_costs = agent_output.get("metadata", {}).get("llm_costs", {})
+                day_total = sum(c.get("total_cost", 0.0) for c in day_costs.values())
+                prior = self._llm_performance_metrics[llm_id].get("total_cost") or 0.0
+                self._llm_performance_metrics[llm_id]["total_cost"] = prior + day_total
 
                 # Calculate total return
                 self._llm_performance_metrics[llm_id]["total_return"] = (total_value / self._initial_capital - 1) * 100
 
             # Print daily progress (using the first LLM as the representative for terminal output)
             # A full leaderboard will be printed at the end
-            first_llm = list(self._llm_configs.keys())[0]
+            if display_output is None:
+                continue
             rows = self._results_builder.build_day_rows(
                 date_str=current_date_str,
                 tickers=self._tickers,
-                agent_output=agent_output, # Last agent output
-                executed_trades=executed_trades, # Last trades
+                agent_output=display_output,
+                executed_trades=display_trades,
                 current_prices=current_prices,
                 portfolio=self._portfolios[first_llm],
                 performance_metrics=self._llm_performance_metrics[first_llm],
@@ -218,23 +232,24 @@ class BacktestEngine:
         
         print(f"\n{Fore.WHITE}{Style.BRIGHT}🏆 ALPHA CHASER LEADERBOARD 🏆{Style.RESET_ALL}")
         
+        # Sort on the numeric return, then format for display
+        ranked = sorted(
+            self._llm_performance_metrics.items(),
+            key=lambda kv: kv[1].get("total_return", 0.0) or 0.0,
+            reverse=True,
+        )
+
         leaderboard_data = []
-        # Attempt to get costs from the last agent output if available in state
-        # In this architecture, costs are accumulated in the state metadata
-        # We'll need a way to retrieve them. For now, we'll try to find them.
-        
-        for llm_id, metrics in self._llm_performance_metrics.items():
+        for llm_id, metrics in ranked:
             config = self._llm_configs[llm_id]
             ret = metrics.get("total_return", 0.0)
             sharpe = metrics.get("sharpe_ratio")
             sortino = metrics.get("sortino_ratio")
             mdd = metrics.get("max_drawdown")
-            
-            # Placeholder for cost (would ideally be pulled from state)
             cost = metrics.get("total_cost", 0.0)
-            
+
             ret_color = Fore.GREEN if ret >= 0 else Fore.RED
-            
+
             leaderboard_data.append([
                 llm_id,
                 f"{config['model_name']} ({config['model_provider']})",
@@ -244,10 +259,7 @@ class BacktestEngine:
                 f"{Fore.RED}{mdd:.2f}%{Style.RESET_ALL}" if mdd is not None else "N/A",
                 f"${cost:.4f}"
             ])
-        
-        # Sort by total return descending
-        leaderboard_data.sort(key=lambda x: float(x[2].split('%')[0].split('m')[-1]), reverse=True)
-        
+
         print(tabulate(
             leaderboard_data,
             headers=["LLM ID", "Model", "Total Return", "Sharpe", "Sortino", "Max DD", "Cost"],
@@ -256,5 +268,14 @@ class BacktestEngine:
         ))
         print("\n")
 
-    def get_portfolio_values(self, llm_id: str) -> Sequence[PortfolioValuePoint]:
+    def get_portfolio_values(self, llm_id: str | None = None) -> Sequence[PortfolioValuePoint]:
+        if llm_id is None:
+            llm_id = next(iter(self._llm_configs))
         return list(self._llm_portfolio_values.get(llm_id, []))
+
+    @property
+    def _portfolio(self) -> Portfolio:
+        """Legacy accessor for single-competitor runs (old CLI and tests)."""
+        if len(self._portfolios) != 1:
+            raise AttributeError("_portfolio is only available for single-LLM runs; use _portfolios[llm_id]")
+        return next(iter(self._portfolios.values()))

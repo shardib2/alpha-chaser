@@ -98,7 +98,10 @@ python -m src.alpha_chaser --tickers AAPL,MSFT,NVDA,TSLA --start-date 2024-01-01
 
 ### Option B: Mock Backtest (no API keys needed)
 
-Validates the full architecture — isolated portfolios, independent decisions, cost tracking, and leaderboard — using deterministic mock LLM responses:
+A UI/formatting demo only. `src/mock_backtest.py` is a standalone script that simulates
+prices with a random walk and "decisions" with seeded RNG — it shares no code with the
+real engine and validates nothing about it. Use it to preview the leaderboard layout, not
+to evaluate models:
 
 ```bash
 python -m src.mock_backtest
@@ -106,9 +109,12 @@ python -m src.mock_backtest
 
 ---
 
-## 📊 Mock Backtest Results (Jan–Feb 2024)
+## 📊 Sample Output (SIMULATED — not real model performance)
 
-The following output was produced by `src/mock_backtest.py` using 7 competing LLMs on AAPL, NVDA, MSFT, TSLA with $100,000 initial capital each.
+> ⚠️ The table below is **synthetic demo output** from `src/mock_backtest.py`
+> (`random.seed(42)`): prices are a random walk and every "LLM decision" is a coin flip
+> against a hardcoded personality bias. The rankings mean nothing. Real results come from
+> `python -m src.alpha_chaser`, which calls the actual models.
 
 ### Leaderboard (ranked by Sharpe Ratio)
 
@@ -169,9 +175,9 @@ Alpha Chaser preserves the original analyst agent architecture and refactors the
 | Component | Change |
 | :--- | :--- |
 | `AgentState` | Now holds a `portfolios` dict keyed by LLM ID instead of a single portfolio |
-| `portfolio_management_agent` | Loops through each LLM's isolated book; independent decisions per model |
+| `portfolio_management_agent` | Receives one competitor's isolated book per graph invocation; decisions keyed by ticker |
 | `risk_management_agent` | Processes each portfolio independently with per-LLM position limits |
-| `BacktestEngine` | Runs N portfolios in parallel; generates leaderboard at end of run |
+| `BacktestEngine` | One graph invocation per competitor per day, each routed to that competitor's model; leaderboard at end of run |
 | `call_llm` | Wraps every LLM call with token counting and USD cost accumulation |
 | `src/llm/api_models.json` | Single source of truth for model names, providers, and pricing |
 | `src/mock_backtest.py` | Self-contained validation harness — no API keys required |
